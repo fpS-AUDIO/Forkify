@@ -4,6 +4,10 @@ import * as hlp from './halpers.js';
 
 export const state = {
   recipe: {},
+  search: {
+    query: ``,
+    results: [],
+  },
 };
 
 export const loadRecipe = async function (idRecipe) {
@@ -23,6 +27,31 @@ export const loadRecipe = async function (idRecipe) {
       sourceUrl: dataResponse.data.recipe.source_url,
     };
   } catch (err) {
-    alert(err);
+    // re-throwing error to make it propage to the controller
+    throw err;
+  }
+};
+
+export const searchRecipe = async function (query) {
+  try {
+    // update state query
+    state.search.query = query;
+
+    // AJAX call for searching query
+    const dataResponse = await hlp.getJSON(
+      `${cfg.REQUEST_URL}?search=${query}`
+    );
+
+    // update state serach results
+    state.search.results = dataResponse.data.recipes.map(recipe => {
+      return {
+        id: recipe.id,
+        title: recipe.title,
+        imageUrl: recipe.image_url,
+        publisher: recipe.publisher,
+      };
+    });
+  } catch (err) {
+    throw err;
   }
 };

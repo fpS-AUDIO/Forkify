@@ -4,28 +4,11 @@ import Fraction from 'fractional'; // import fraction library
 class RecipeView {
   #parentElement = document.querySelector('.recipe');
   #data;
-
-  renderLoadingSpinner() {
-    const spinnerHtml = `
-      <div class="spinner">
-        <svg>
-          <use href="${icon}.svg#icon-loader"></use>
-        </svg>
-      </div>
-    `;
-    this.#clearContainer();
-    this.#parentElement.insertAdjacentHTML(`afterbegin`, spinnerHtml);
-  }
+  #errorMessage = `We could not find the recipe. Please try another one!`;
+  #message = `HELLO' I'm TEMP MESSAGE`;
 
   #clearContainer() {
     this.#parentElement.innerHTML = ``;
-  }
-
-  render(data) {
-    this.#data = data;
-    const recipeMarkup = this.#generateMarkup();
-    this.#clearContainer();
-    this.#parentElement.insertAdjacentHTML(`afterbegin`, recipeMarkup);
   }
 
   #generateMarkup() {
@@ -143,6 +126,62 @@ class RecipeView {
         ${ingredient.description}
       </div>
     </li>`;
+  }
+
+  renderLoadingSpinner() {
+    const spinnerHtml = `
+      <div class="spinner">
+        <svg>
+          <use href="${icon}.svg#icon-loader"></use>
+        </svg>
+      </div>
+    `;
+    this.#clearContainer();
+    this.#parentElement.insertAdjacentHTML(`afterbegin`, spinnerHtml);
+  }
+
+  render(data) {
+    this.#data = data;
+    const recipeMarkup = this.#generateMarkup();
+    this.#clearContainer();
+    this.#parentElement.insertAdjacentHTML(`afterbegin`, recipeMarkup);
+  }
+
+  renderError(message = this.#errorMessage) {
+    const errorMarkup = `
+    <div class="error">
+      <div>
+        <svg>
+          <use href="${icon}#icon-alert-triangle"></use>
+        </svg>
+      </div>
+      <p>No recipes found for your query. Please try again!</p>
+    </div>
+    `;
+    this.#clearContainer();
+    this.#parentElement.insertAdjacentHTML(`afterbegin`, errorMarkup);
+  }
+
+  renderMessage(message = this.#message) {
+    const messageMarkup = `
+    <div class="message">
+      <div>
+        <svg>
+          <use href="${icon}#icon-smile"></use>
+        </svg>
+      </div>
+      <p>Start by searching for a recipe or an ingredient. Have fun!</p>
+    </div>
+    `;
+    this.#clearContainer();
+    this.#parentElement.insertAdjacentHTML(`afterbegin`, messageMarkup);
+  }
+
+  // publisher
+  addHandlerRender(subscriberFn) {
+    [`load`, `hashchange`].forEach(event =>
+      window.addEventListener(event, subscriberFn)
+    );
   }
 }
 
