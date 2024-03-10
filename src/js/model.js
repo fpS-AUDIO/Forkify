@@ -7,6 +7,8 @@ export const state = {
   search: {
     query: ``,
     results: [],
+    page: 1,
+    resultsPerPage: cfg.RESULTS_PER_PAGE,
   },
 };
 
@@ -26,6 +28,8 @@ export const loadRecipe = async function (idRecipe) {
       publisher: dataResponse.data.recipe.publisher,
       sourceUrl: dataResponse.data.recipe.source_url,
     };
+
+    console.log(state.recipe);
   } catch (err) {
     // re-throwing error to make it propage to the controller
     throw err;
@@ -54,4 +58,18 @@ export const searchRecipe = async function (query) {
   } catch (err) {
     throw err;
   }
+};
+
+export const getSearchResultsPage = function (page = state.search.page) {
+  /* ----- FORMULA:
+  const startOfArray = (page - 1) * resultPerPage;
+  const endOfArray = page * resultPerPage;
+  const resultPage = arrayResults.slice(startOfArray, endOfArray);
+  */
+  state.search.page = page;
+  const start = (page - 1) * state.search.resultsPerPage;
+  const end = page * state.search.resultsPerPage;
+
+  // simply return the sliced full array of results
+  return state.search.results.slice(start, end);
 };
