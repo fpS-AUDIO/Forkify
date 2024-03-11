@@ -28,8 +28,6 @@ export const loadRecipe = async function (idRecipe) {
       publisher: dataResponse.data.recipe.publisher,
       sourceUrl: dataResponse.data.recipe.source_url,
     };
-
-    console.log(state.recipe);
   } catch (err) {
     // re-throwing error to make it propage to the controller
     throw err;
@@ -72,4 +70,14 @@ export const getSearchResultsPage = function (page = state.search.page) {
 
   // simply return the sliced full array of results
   return state.search.results.slice(start, end);
+};
+
+export const updateServingsNum = function (newServings) {
+  // newQuantity = oldQuantity * newServings / oldServing
+  state.recipe.ingredients.forEach(ing => {
+    ing.quantity = (ing.quantity * newServings) / state.recipe.servings;
+  });
+
+  // Also update the actual servings to newServings
+  state.recipe.servings = newServings;
 };

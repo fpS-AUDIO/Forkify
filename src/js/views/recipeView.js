@@ -36,12 +36,16 @@ class RecipeView extends View {
               <span class="recipe__info-text">servings</span>
 
               <div class="recipe__info-buttons">
-                <button class="btn--tiny btn--increase-servings">
+                <button class="btn--tiny btn--update-servings" data-update-servings-to=${
+                  this._data.servings - 1
+                }>
                   <svg>
                     <use href="${icon}#icon-minus-circle"></use>
                   </svg>
                 </button>
-                <button class="btn--tiny btn--increase-servings">
+                <button class="btn--tiny btn--update-servings" data-update-servings-to=${
+                  this._data.servings + 1
+                }>
                   <svg>
                     <use href="${icon}#icon-plus-circle"></use>
                   </svg>
@@ -65,18 +69,6 @@ class RecipeView extends View {
             ${this._data.ingredients
               .map(this._generateMarkupIngredient)
               .join('')}
-
-              <li class="recipe__ingredient">
-                <svg class="recipe__icon">
-                  <use href="${icon}#icon-check"></use>
-                </svg>
-                <div class="recipe__quantity">1000</div>
-                <div class="recipe__description">
-                  <span class="recipe__unit">g</span>
-                  pasta
-                </div>
-              </li>
-
             </ul>
           </div>
 
@@ -117,6 +109,15 @@ class RecipeView extends View {
         ${ingredient.description}
       </div>
     </li>`;
+  }
+
+  addHandlerUpdateServings(subscriberFn) {
+    this._parentElement.addEventListener(`click`, event => {
+      const btn = event.target.closest(`.btn--update-servings`);
+      if (!btn) return;
+      const newServings = +btn.dataset.updateServingsTo;
+      if (newServings > 0) subscriberFn(newServings);
+    });
   }
 
   // publisher

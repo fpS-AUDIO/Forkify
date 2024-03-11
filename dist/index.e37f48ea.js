@@ -607,7 +607,9 @@ const controlRecipes = async function() {
         if (!idRecipe) return; // guard clause to check if there any id
         // view: render loading spinner
         (0, _recipeViewJsDefault.default).renderLoadingSpinner();
-        // model: get recipe (await before move the execution)
+        // updating the result view to mark the selected search result
+        (0, _resultsViewJsDefault.default).update(_modelJs.getSearchResultsPage());
+        // model: loading recipe (await before move the execution)
         await _modelJs.loadRecipe(idRecipe);
         // rendering recipe (gonna be a separated function)
         (0, _recipeViewJsDefault.default).render(_modelJs.state.recipe);
@@ -639,15 +641,17 @@ const controlPagination = function(goTo) {
     // render NEW pagination
     (0, _paginationViewJsDefault.default).render(_modelJs.state.search);
 };
-// const controlServings = function(){
-// /*
-//   1.
-// */
-// }
+const controlServings = function(newServings) {
+    // update recipe serving
+    _modelJs.updateServingsNum(newServings);
+    // update the recipe view
+    (0, _recipeViewJsDefault.default).update(_modelJs.state.recipe);
+};
 // ----- entry point ----- //
 init = function() {
     // subscriber to views publishers
     (0, _recipeViewJsDefault.default).addHandlerRender(controlRecipes);
+    (0, _recipeViewJsDefault.default).addHandlerUpdateServings(controlServings);
     (0, _searchViewJsDefault.default).addHandlerSearch(controlSearch);
     (0, _paginationViewJsDefault.default).addHandlerPagination(controlPagination);
 };
@@ -1893,6 +1897,7 @@ parcelHelpers.export(exports, "state", ()=>state);
 parcelHelpers.export(exports, "loadRecipe", ()=>loadRecipe);
 parcelHelpers.export(exports, "searchRecipe", ()=>searchRecipe);
 parcelHelpers.export(exports, "getSearchResultsPage", ()=>getSearchResultsPage);
+parcelHelpers.export(exports, "updateServingsNum", ()=>updateServingsNum);
 var _runtime = require("regenerator-runtime/runtime"); // for polyfilling async function (old browser support)
 var _configJs = require("./config.js");
 var _halpersJs = require("./halpers.js");
@@ -1920,7 +1925,6 @@ const loadRecipe = async function(idRecipe) {
             publisher: dataResponse.data.recipe.publisher,
             sourceUrl: dataResponse.data.recipe.source_url
         };
-        console.log(state.recipe);
     } catch (err) {
         // re-throwing error to make it propage to the controller
         throw err;
@@ -1955,6 +1959,14 @@ const getSearchResultsPage = function(page = state.search.page) {
     const end = page * state.search.resultsPerPage;
     // simply return the sliced full array of results
     return state.search.results.slice(start, end);
+};
+const updateServingsNum = function(newServings) {
+    // newQuantity = oldQuantity * newServings / oldServing
+    state.recipe.ingredients.forEach((ing)=>{
+        ing.quantity = ing.quantity * newServings / state.recipe.servings;
+    });
+    // Also update the actual servings to newServings
+    state.recipe.servings = newServings;
 };
 
 },{"regenerator-runtime/runtime":"dXNgZ","./config.js":"k5Hzs","./halpers.js":"5Afth","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"dXNgZ":[function(require,module,exports) {
@@ -2647,12 +2659,12 @@ class RecipeView extends (0, _viewJsDefault.default) {
               <span class="recipe__info-text">servings</span>
 
               <div class="recipe__info-buttons">
-                <button class="btn--tiny btn--increase-servings">
+                <button class="btn--tiny btn--update-servings" data-update-servings-to=${this._data.servings - 1}>
                   <svg>
                     <use href="${0, _iconsSvgDefault.default}#icon-minus-circle"></use>
                   </svg>
                 </button>
-                <button class="btn--tiny btn--increase-servings">
+                <button class="btn--tiny btn--update-servings" data-update-servings-to=${this._data.servings + 1}>
                   <svg>
                     <use href="${0, _iconsSvgDefault.default}#icon-plus-circle"></use>
                   </svg>
@@ -2674,18 +2686,6 @@ class RecipeView extends (0, _viewJsDefault.default) {
             <ul class="recipe__ingredient-list">
 
             ${this._data.ingredients.map(this._generateMarkupIngredient).join("")}
-
-              <li class="recipe__ingredient">
-                <svg class="recipe__icon">
-                  <use href="${0, _iconsSvgDefault.default}#icon-check"></use>
-                </svg>
-                <div class="recipe__quantity">1000</div>
-                <div class="recipe__description">
-                  <span class="recipe__unit">g</span>
-                  pasta
-                </div>
-              </li>
-
             </ul>
           </div>
 
@@ -2719,6 +2719,14 @@ class RecipeView extends (0, _viewJsDefault.default) {
         ${ingredient.description}
       </div>
     </li>`;
+    }
+    addHandlerUpdateServings(subscriberFn) {
+        this._parentElement.addEventListener(`click`, (event)=>{
+            const btn = event.target.closest(`.btn--update-servings`);
+            if (!btn) return;
+            const newServings = +btn.dataset.updateServingsTo;
+            if (newServings > 0) subscriberFn(newServings);
+        });
     }
     // publisher
     addHandlerRender(subscriberFn) {
@@ -3040,6 +3048,50 @@ class View {
         this._clearContainer();
         this._parentElement.insertAdjacentHTML(`afterbegin`, markup);
     }
+    // updates only text and attributes in DOM
+    update(data) {
+        // if (!data || (Array.isArray(data) && data.length === 0))
+        //   return this.renderError();
+        // indeed update _data (state)
+        this._data = data;
+        // as if we want to render new markup we need the new markup to compare it with the old markup
+        const newMarkup = this._generateMarkup();
+        // ALGORITHM TO UPDATE DOM:
+        // ========================
+        // converting the newMarkup (string) to a DOM Object:
+        //  - document.createRange() returns range
+        //  - range.createContextualFragment() converts html string to the real DOM object
+        const virtualDOM = document.createRange().createContextualFragment(newMarkup);
+        // selecting the NodeList of all elements of virtual DOM and converting it into a real array
+        const newElements = Array.from(virtualDOM.querySelectorAll(`*`));
+        // selecting also all current elements of DOM to compare them and converting it into a real array
+        const currentElements = Array.from(this._parentElement.querySelectorAll(`*`));
+        // comparing the 2 arrays of elements
+        // looping over the the array of new elements
+        newElements.forEach((newEl, indx)=>{
+            // selecting the same old element (which is actual on the page)
+            const oldEl = currentElements[indx];
+            // SOME THEORY:
+            // nodeElement1.isEqualNode(nodeElement2) returns true if both node elements are the same
+            // nodeElement.nodeValue is property which returns content of text node (string) or null if it's other type of node (element)
+            // nodeElement.FirstChild is property the node which actually contains the text (text node)
+            // nodeElement.attributyes is property which returns NamedNodeMap (object) whoch contains all attributes
+            // nodeElement.setAttribute(nameAttr, valueAttr)
+            // if (!newEl.isEqualNode(oldEl))                  -> newEl is different from oldEl
+            //    &&
+            // if (newEl.firstChild.nodeValue.trim() !== ``)   -> `trimmed` text content of text node should not be empty
+            //                                                  using optional chaining because firstChild might not always exists
+            // updates changed text (on elements which contains text directly)
+            if (!newEl.isEqualNode(oldEl) && newEl.firstChild?.nodeValue.trim() !== ``) // update text content of text nodes
+            oldEl.textContent = newEl.textContent;
+            // updates changed attributes
+            if (!newEl.isEqualNode(oldEl)) // converting attributes object of changed elements to an array
+            // then loop that array and change the value of all attrbiutes
+            Array.from(newEl.attributes).forEach((attribute)=>{
+                oldEl.setAttribute(attribute.name, attribute.value);
+            });
+        });
+    }
     renderLoadingSpinner() {
         const spinnerHtml = `
       <div class="spinner">
@@ -3117,9 +3169,10 @@ class resultsView extends (0, _viewJsDefault.default) {
         return this._data.map((result)=>this._generateMarkupResult(result)).join(``);
     }
     _generateMarkupResult(result) {
+        const currentId = window.location.hash.slice(1);
         return `
     <li class="preview">
-        <a class="preview__link" href="#${result.id}">
+        <a class="preview__link ${currentId === result.id ? `preview__link--active` : ``} "  href="#${result.id}">
             <figure class="preview__fig">
                 <img src="${result.imageUrl}" alt="Test" />
             </figure>

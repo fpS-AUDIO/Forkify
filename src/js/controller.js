@@ -21,9 +21,12 @@ const controlRecipes = async function () {
     // view: render loading spinner
     recipeView.renderLoadingSpinner();
 
-    // model: get recipe (await before move the execution)
-    await model.loadRecipe(idRecipe);
+    // updating the result view to mark the selected search result
+    resultsView.update(model.getSearchResultsPage());
 
+    // model: loading recipe (await before move the execution)
+    await model.loadRecipe(idRecipe);
+    
     // rendering recipe (gonna be a separated function)
     recipeView.render(model.state.recipe);
   } catch (err) {
@@ -60,16 +63,18 @@ const controlPagination = function (goTo) {
   paginationView.render(model.state.search);
 };
 
-// const controlServings = function(){
-// /*
-//   1.
-// */
-// }
+const controlServings = function (newServings) {
+  // update recipe serving
+  model.updateServingsNum(newServings);
+  // update the recipe view
+  recipeView.update(model.state.recipe);
+};
 
 // ----- entry point ----- //
 init = function () {
   // subscriber to views publishers
   recipeView.addHandlerRender(controlRecipes);
+  recipeView.addHandlerUpdateServings(controlServings);
   searchView.addHandlerSearch(controlSearch);
   paginationView.addHandlerPagination(controlPagination);
 };
