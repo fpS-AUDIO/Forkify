@@ -3,6 +3,7 @@ import * as cfg from './config.js';
 import * as hlp from './halpers.js';
 
 export const state = {
+  bookmarks: [],
   recipe: {},
   search: {
     query: ``,
@@ -10,6 +11,18 @@ export const state = {
     page: 1,
     resultsPerPage: cfg.RESULTS_PER_PAGE,
   },
+};
+
+const localStoreBookmarks = function () {
+  const bookmarksStringified = JSON.stringify(state.bookmarks);
+  localStorage.setItem(`bookmarks`, bookmarksStringified);
+};
+
+export const getLocalBookmarks = function () {
+  const bookmarksStringified = localStorage.getItem(`bookmarks`);
+  if (bookmarksStringified) {
+    state.bookmarks = JSON.parse(bookmarksStringified);
+  }
 };
 
 export const loadRecipe = async function (idRecipe) {
@@ -28,6 +41,10 @@ export const loadRecipe = async function (idRecipe) {
       publisher: dataResponse.data.recipe.publisher,
       sourceUrl: dataResponse.data.recipe.source_url,
     };
+
+    if (state.bookmarks.some(recipe => recipe.id === state.recipe.id))
+      state.recipe.bookmarked = true;
+    else state.recipe.bookmarked === false;
   } catch (err) {
     // re-throwing error to make it propage to the controller
     throw err;
@@ -53,6 +70,9 @@ export const searchRecipe = async function (query) {
         publisher: recipe.publisher,
       };
     });
+
+    // reset page after search
+    state.search.page = 1;
   } catch (err) {
     throw err;
   }
@@ -80,4 +100,19 @@ export const updateServingsNum = function (newServings) {
 
   // Also update the actual servings to newServings
   state.recipe.servings = newServings;
+};
+
+export const addBookmark = function (recipe) {
+  state.bookmarks.push(recipe);
+  state.recipe.bookmarked = true;
+  localStoreBookmarks();
+};
+
+export const removeBookmark = function (id) {
+  const indexRecipe = state.bookmarks.findIndex(recipe => recipe.id === id);
+  if (indexRecipe !== -1) {
+    state.bookmarks.splice(indexRecipe, 1);
+    state.recipe.bookmarked = false;
+  }
+  localStoreBookmarks();
 };
