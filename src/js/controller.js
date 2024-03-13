@@ -1,5 +1,6 @@
 // ----- imports ----- //
 import * as model from './model.js';
+import * as cfg from './config.js';
 import recipeView from './views/recipeView.js';
 import searchView from './views/searchView.js';
 import resultsView from './views/resultsView.js';
@@ -98,9 +99,37 @@ const loadBookmarks = function () {
   bookmarksView.render(model.state.bookmarks);
 };
 
-const controlNewRecipe = function (recipeData) {
-  console.log(recipeData);
-  // handled by model
+const controlNewRecipe = async function (recipeData) {
+  try {
+    // show loading spinner
+    addRecipeView.renderLoadingSpinner();
+
+    // upload handled by model
+    await model.uploadNewRecipe(recipeData);
+
+    // add recipe to bookmarks
+    model.addBookmark(model.state.recipe);
+
+    // render recipe
+    recipeView.render(model.state.recipe);
+
+    // show success message
+    addRecipeView.renderMessage();
+
+    // render bookmark view
+    bookmarksView.render(model.state.bookmarks);
+
+    // change id in url
+    window.history.pushState(null, ``, `#${model.state.recipe.id}`);
+
+    // also close after submitting
+    setTimeout(() => {
+      addRecipeView._showHideAddRecipe();
+    }, cfg.CLOSE_FORM_SECONDS * 1000);
+  } catch (err) {
+    addRecipeView.renderError(`There was an error uploading your recipe`);
+    console.log(err);
+  }
 };
 
 // ----- entry point ----- //

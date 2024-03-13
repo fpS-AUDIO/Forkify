@@ -13,6 +13,23 @@ export const state = {
   },
 };
 
+const creatRecipeObj = function (data) {
+  return {
+    id: data.data.recipe.id,
+    title: data.data.recipe.title,
+    imageUrl: data.data.recipe.image_url,
+    servings: data.data.recipe.servings,
+    cookingTime: data.data.recipe.cooking_time,
+    ingredients: data.data.recipe.ingredients,
+    publisher: data.data.recipe.publisher,
+    sourceUrl: data.data.recipe.source_url,
+    // use short circuiting (&&) so if :
+    // `data.data.recipe.key` is false ->  do nothing
+    // `data.data.recipe.key` is true ->   create object and spread it inside the main recipe obj
+    ...(data.data.recipe.key && { key: data.data.recipe.key }),
+  };
+};
+
 const localStoreBookmarks = function () {
   const bookmarksStringified = JSON.stringify(state.bookmarks);
   localStorage.setItem(`bookmarks`, bookmarksStringified);
@@ -28,19 +45,12 @@ export const getLocalBookmarks = function () {
 export const loadRecipe = async function (idRecipe) {
   try {
     // AJAX call helper function to get recipe data
-    const dataResponse = await hlp.getJSON(`${cfg.REQUEST_URL}/${idRecipe}`);
+    const dataResponse = await hlp.getJSON(
+      `${cfg.REQUEST_URL}/${idRecipe}?key=${cfg.API_KEY}`
+    );
 
     // update state: change recipe{}
-    state.recipe = {
-      id: dataResponse.data.recipe.id,
-      title: dataResponse.data.recipe.title,
-      imageUrl: dataResponse.data.recipe.image_url,
-      servings: dataResponse.data.recipe.servings,
-      cookingTime: dataResponse.data.recipe.cooking_time,
-      ingredients: dataResponse.data.recipe.ingredients,
-      publisher: dataResponse.data.recipe.publisher,
-      sourceUrl: dataResponse.data.recipe.source_url,
-    };
+    state.recipe = creatRecipeObj(dataResponse);
 
     if (state.bookmarks.some(recipe => recipe.id === state.recipe.id))
       state.recipe.bookmarked = true;
@@ -58,7 +68,7 @@ export const searchRecipe = async function (query) {
 
     // AJAX call for searching query
     const dataResponse = await hlp.getJSON(
-      `${cfg.REQUEST_URL}?search=${query}`
+      `${cfg.REQUEST_URL}?search=${query}&key=${cfg.API_KEY}`
     );
 
     // update state serach results
@@ -68,6 +78,7 @@ export const searchRecipe = async function (query) {
         title: recipe.title,
         imageUrl: recipe.image_url,
         publisher: recipe.publisher,
+        ...(recipe.key && { key: recipe.key }),
       };
     });
 
@@ -115,4 +126,46 @@ export const removeBookmark = function (id) {
     state.recipe.bookmarked = false;
   }
   localStoreBookmarks();
+};
+
+export const uploadNewRecipe = async function (recipeData) {
+  try {
+    // creating ingredients array formatted like in App
+    const ingredientsArr = Object.entries(recipeData).filter(entry => {
+      return entry[0].startsWith(`ingredient`) && entry[1] !== ``;
+    });
+    const ingredientsObj = ingredientsArr.map(ingr => {
+      ingrArray = ingr[1].replaceAll(` `, ``).split(`,`);
+      if (!ingrArray.length === 3)
+        throw new Error(`Wrong Ingredients format...`);
+      const [quantity, unit, description] = ingrArray;
+      return { quantity: quantity ? +quantity : null, unit, description };
+    });
+
+    // creating recipe object formatted like in API
+    const recipeToUpload = {
+      title: recipeData.title,
+      image_url: recipeData.image,
+      servings: +recipeData.servings,
+      cooking_time: +recipeData.cookingTime,
+      publisher: recipeData.publisher,
+      source_url: recipeData.sourceUrl,
+      ingredients: ingredientsObj,
+    };
+
+    // make AJAX call
+    const uploadResponse = await hlp.sendJSON(
+      `${cfg.REQUEST_URL}?key=${cfg.API_KEY}`,
+      recipeToUpload
+    );
+
+    // transofrm recipe in application formatted style object
+    const createdRecipe = creatRecipeObj(uploadResponse);
+
+    // update state
+    state.recipe = createdRecipe;
+  } catch (err) {
+    console.log(err);
+    throw err;
+  }
 };

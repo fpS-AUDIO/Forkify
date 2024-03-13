@@ -588,6 +588,7 @@ function hmrAccept(bundle /*: ParcelRequire */ , id /*: string */ ) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 var _webImmediateJs = require("core-js/modules/web.immediate.js");
 var _modelJs = require("./model.js");
+var _configJs = require("./config.js");
 var _recipeViewJs = require("./views/recipeView.js");
 var _recipeViewJsDefault = parcelHelpers.interopDefault(_recipeViewJs);
 var _searchViewJs = require("./views/searchView.js");
@@ -669,9 +670,30 @@ const loadBookmarks = function() {
     // render bookmarks in view bookmarks view
     (0, _bookmarksViewJsDefault.default).render(_modelJs.state.bookmarks);
 };
-const controlNewRecipe = function(recipeData) {
-    console.log(recipeData);
-// handled by model
+const controlNewRecipe = async function(recipeData) {
+    try {
+        // show loading spinner
+        (0, _addRecipeViewJsDefault.default).renderLoadingSpinner();
+        // upload handled by model
+        await _modelJs.uploadNewRecipe(recipeData);
+        // add recipe to bookmarks
+        _modelJs.addBookmark(_modelJs.state.recipe);
+        // render recipe
+        (0, _recipeViewJsDefault.default).render(_modelJs.state.recipe);
+        // show success message
+        (0, _addRecipeViewJsDefault.default).renderMessage();
+        // render bookmark view
+        (0, _bookmarksViewJsDefault.default).render(_modelJs.state.bookmarks);
+        // change id in url
+        window.history.pushState(null, ``, `#${_modelJs.state.recipe.id}`);
+        // also close after submitting
+        setTimeout(()=>{
+            (0, _addRecipeViewJsDefault.default)._showHideAddRecipe();
+        }, _configJs.CLOSE_FORM_SECONDS * 1000);
+    } catch (err) {
+        (0, _addRecipeViewJsDefault.default).renderError(`There was an error uploading your recipe`);
+        console.log(err);
+    }
 };
 // ----- entry point ----- //
 init = function() {
@@ -686,7 +708,7 @@ init = function() {
 };
 init();
 
-},{"core-js/modules/web.immediate.js":"49tUX","./model.js":"Y4A21","./views/recipeView.js":"l60JC","./views/searchView.js":"9OQAM","./views/resultsView.js":"cSbZE","./views/paginationView.js":"6z7bi","./views/bookmarksView.js":"4Lqzq","regenerator-runtime/runtime":"dXNgZ","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3","./views/addRecipeView.js":"i6DNj"}],"49tUX":[function(require,module,exports) {
+},{"core-js/modules/web.immediate.js":"49tUX","./model.js":"Y4A21","./config.js":"k5Hzs","./views/recipeView.js":"l60JC","./views/searchView.js":"9OQAM","./views/resultsView.js":"cSbZE","./views/paginationView.js":"6z7bi","./views/bookmarksView.js":"4Lqzq","./views/addRecipeView.js":"i6DNj","regenerator-runtime/runtime":"dXNgZ","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"49tUX":[function(require,module,exports) {
 "use strict";
 // TODO: Remove this module from `core-js@4` since it's split to modules listed below
 require("52e9b3eefbbce1ed");
@@ -1930,6 +1952,7 @@ parcelHelpers.export(exports, "getSearchResultsPage", ()=>getSearchResultsPage);
 parcelHelpers.export(exports, "updateServingsNum", ()=>updateServingsNum);
 parcelHelpers.export(exports, "addBookmark", ()=>addBookmark);
 parcelHelpers.export(exports, "removeBookmark", ()=>removeBookmark);
+parcelHelpers.export(exports, "uploadNewRecipe", ()=>uploadNewRecipe);
 var _runtime = require("regenerator-runtime/runtime"); // for polyfilling async function (old browser support)
 var _configJs = require("./config.js");
 var _halpersJs = require("./halpers.js");
@@ -1943,6 +1966,24 @@ const state = {
         resultsPerPage: _configJs.RESULTS_PER_PAGE
     }
 };
+const creatRecipeObj = function(data) {
+    return {
+        id: data.data.recipe.id,
+        title: data.data.recipe.title,
+        imageUrl: data.data.recipe.image_url,
+        servings: data.data.recipe.servings,
+        cookingTime: data.data.recipe.cooking_time,
+        ingredients: data.data.recipe.ingredients,
+        publisher: data.data.recipe.publisher,
+        sourceUrl: data.data.recipe.source_url,
+        // use short circuiting (&&) so if :
+        // `data.data.recipe.key` is false ->  do nothing
+        // `data.data.recipe.key` is true ->   create object and spread it inside the main recipe obj
+        ...data.data.recipe.key && {
+            key: data.data.recipe.key
+        }
+    };
+};
 const localStoreBookmarks = function() {
     const bookmarksStringified = JSON.stringify(state.bookmarks);
     localStorage.setItem(`bookmarks`, bookmarksStringified);
@@ -1954,18 +1995,9 @@ const getLocalBookmarks = function() {
 const loadRecipe = async function(idRecipe) {
     try {
         // AJAX call helper function to get recipe data
-        const dataResponse = await _halpersJs.getJSON(`${_configJs.REQUEST_URL}/${idRecipe}`);
+        const dataResponse = await _halpersJs.getJSON(`${_configJs.REQUEST_URL}/${idRecipe}?key=${_configJs.API_KEY}`);
         // update state: change recipe{}
-        state.recipe = {
-            id: dataResponse.data.recipe.id,
-            title: dataResponse.data.recipe.title,
-            imageUrl: dataResponse.data.recipe.image_url,
-            servings: dataResponse.data.recipe.servings,
-            cookingTime: dataResponse.data.recipe.cooking_time,
-            ingredients: dataResponse.data.recipe.ingredients,
-            publisher: dataResponse.data.recipe.publisher,
-            sourceUrl: dataResponse.data.recipe.source_url
-        };
+        state.recipe = creatRecipeObj(dataResponse);
         if (state.bookmarks.some((recipe)=>recipe.id === state.recipe.id)) state.recipe.bookmarked = true;
         else state.recipe.bookmarked;
     } catch (err) {
@@ -1978,14 +2010,17 @@ const searchRecipe = async function(query) {
         // update state query
         state.search.query = query;
         // AJAX call for searching query
-        const dataResponse = await _halpersJs.getJSON(`${_configJs.REQUEST_URL}?search=${query}`);
+        const dataResponse = await _halpersJs.getJSON(`${_configJs.REQUEST_URL}?search=${query}&key=${_configJs.API_KEY}`);
         // update state serach results
         state.search.results = dataResponse.data.recipes.map((recipe)=>{
             return {
                 id: recipe.id,
                 title: recipe.title,
                 imageUrl: recipe.image_url,
-                publisher: recipe.publisher
+                publisher: recipe.publisher,
+                ...recipe.key && {
+                    key: recipe.key
+                }
             };
         });
         // reset page after search
@@ -2025,6 +2060,43 @@ const removeBookmark = function(id) {
         state.recipe.bookmarked = false;
     }
     localStoreBookmarks();
+};
+const uploadNewRecipe = async function(recipeData) {
+    try {
+        // creating ingredients array formatted like in App
+        const ingredientsArr = Object.entries(recipeData).filter((entry)=>{
+            return entry[0].startsWith(`ingredient`) && entry[1] !== ``;
+        });
+        const ingredientsObj = ingredientsArr.map((ingr)=>{
+            ingrArray = ingr[1].replaceAll(` `, ``).split(`,`);
+            ingrArray.length;
+            const [quantity, unit, description] = ingrArray;
+            return {
+                quantity: quantity ? +quantity : null,
+                unit,
+                description
+            };
+        });
+        // creating recipe object formatted like in API
+        const recipeToUpload = {
+            title: recipeData.title,
+            image_url: recipeData.image,
+            servings: +recipeData.servings,
+            cooking_time: +recipeData.cookingTime,
+            publisher: recipeData.publisher,
+            source_url: recipeData.sourceUrl,
+            ingredients: ingredientsObj
+        };
+        // make AJAX call
+        const uploadResponse = await _halpersJs.sendJSON(`${_configJs.REQUEST_URL}?key=${_configJs.API_KEY}`, recipeToUpload);
+        // transofrm recipe in application formatted style object
+        const createdRecipe = creatRecipeObj(uploadResponse);
+        // update state
+        state.recipe = createdRecipe;
+    } catch (err) {
+        console.log(err);
+        throw err;
+    }
 };
 
 },{"regenerator-runtime/runtime":"dXNgZ","./config.js":"k5Hzs","./halpers.js":"5Afth","@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"dXNgZ":[function(require,module,exports) {
@@ -2619,9 +2691,13 @@ parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "REQUEST_URL", ()=>REQUEST_URL);
 parcelHelpers.export(exports, "TIMEOUT_REQUEST_SEC", ()=>TIMEOUT_REQUEST_SEC);
 parcelHelpers.export(exports, "RESULTS_PER_PAGE", ()=>RESULTS_PER_PAGE);
+parcelHelpers.export(exports, "API_KEY", ()=>API_KEY);
+parcelHelpers.export(exports, "CLOSE_FORM_SECONDS", ()=>CLOSE_FORM_SECONDS);
 const REQUEST_URL = `https://forkify-api.herokuapp.com/api/v2/recipes`;
 const TIMEOUT_REQUEST_SEC = 10;
 const RESULTS_PER_PAGE = 10;
+const API_KEY = `075bb9fe-2648-41a0-aa5f-a90ec37ced6a`;
+const CLOSE_FORM_SECONDS = 2.5;
 
 },{"@parcel/transformer-js/src/esmodule-helpers.js":"gkKU3"}],"gkKU3":[function(require,module,exports) {
 exports.interopDefault = function(a) {
@@ -2657,6 +2733,7 @@ exports.export = function(dest, destName, get) {
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 parcelHelpers.export(exports, "getJSON", ()=>getJSON);
+parcelHelpers.export(exports, "sendJSON", ()=>sendJSON);
 var _configJs = require("./config.js");
 const timeout = function(s) {
     return new Promise(function(_, reject) {
@@ -2670,6 +2747,31 @@ const getJSON = async function(url) {
         // using Promise.race() to prevent infinite fetching
         const response = await Promise.race([
             fetch(url),
+            timeout(_configJs.TIMEOUT_REQUEST_SEC)
+        ]);
+        const dataResponse = await response.json();
+        // guard clause to check response
+        if (!response.ok) throw new Error(`Something went wrong: ${dataResponse.message}`);
+        return dataResponse;
+    } catch (err) {
+        throw err;
+    }
+};
+const sendJSON = async function(url, uploadData) {
+    try {
+        // to make POST request add object of options as 2nd parameter of fetch() function
+        const fetchPro = fetch(url, {
+            method: `POST`,
+            // headers are information about request
+            headers: {
+                "Content-Type": `application/json`
+            },
+            // actual data to send
+            body: JSON.stringify(uploadData)
+        });
+        // using Promise.race() to prevent infinite fetching using custom timeout() function
+        const response = await Promise.race([
+            fetchPro,
             timeout(_configJs.TIMEOUT_REQUEST_SEC)
         ]);
         const dataResponse = await response.json();
@@ -2730,7 +2832,10 @@ class RecipeView extends (0, _viewJsDefault.default) {
               </div>
             </div>
 
-            <div class="recipe__user-generated">
+            <div class="recipe__user-generated ${this._data.key ? "" : "hidden"}">
+              <svg>
+                <use href="${0, _iconsSvgDefault.default}#icon-user"></use>
+              </svg>
             </div>
             <button class="btn--round btn--bookmarks">
               <svg class="">
@@ -3260,6 +3365,11 @@ class PreviewView extends (0, _viewJsDefault.default) {
             <div class="preview__data">
                 <h4 class="preview__title">${result.title}</h4>
                 <p class="preview__publisher">${result.publisher}</p>
+                <div class="preview__user-generated ${this._data.key ? "" : "hidden"}">
+                  <svg>
+                    <use href="${0, _iconsSvgDefault.default}#icon-user"></use>
+                  </svg>
+              </div>
             </div>
         </a>
     </li>
@@ -3359,6 +3469,7 @@ var _iconsSvgDefault = parcelHelpers.interopDefault(_iconsSvg);
 var _viewJs = require("./View.js");
 var _viewJsDefault = parcelHelpers.interopDefault(_viewJs);
 class AddRecipeView extends (0, _viewJsDefault.default) {
+    _message = `Your recipe was successfully added!`;
     _parentElement = document.querySelector(".upload");
     _closeBtn = document.querySelector(`.btn--close-modal`);
     _openBtn = document.querySelector(`.nav__btn--add-recipe`);
@@ -3393,8 +3504,6 @@ class AddRecipeView extends (0, _viewJsDefault.default) {
             const dataObj = Object.fromEntries(dataArray);
             // handled by controller
             subscriberFn(dataObj);
-            // also close after submitting
-            this._showHideAddRecipe();
         });
     }
 }

@@ -2,6 +2,7 @@ import icon from 'url:../../img/icons.svg'; // loading static file icons.svg
 import View from './View.js';
 
 class AddRecipeView extends View {
+  _message = `Your recipe was successfully added!`;
   _parentElement = document.querySelector('.upload');
   _closeBtn = document.querySelector(`.btn--close-modal`);
   _openBtn = document.querySelector(`.nav__btn--add-recipe`);
@@ -34,8 +35,6 @@ class AddRecipeView extends View {
       const dataObj = Object.fromEntries(dataArray);
       // handled by controller
       subscriberFn(dataObj);
-      // also close after submitting
-      this._showHideAddRecipe();
     });
   }
 }
